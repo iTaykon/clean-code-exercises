@@ -59,30 +59,60 @@ class PointCloud:
         # Note: this is very inefficient, but does it for us...
         return self._points.index(self.get_nearest(p))
 
+class Line:
+    def __init__(self, source: Point, target: Point) -> None:
+        self._source = source
+        self._target = target
+        self._vector = (
+            target.x - source.x,
+            target.y - source.y
+        )
 
-def plot_over_line(point_cloud: PointCloud,
-                   point_values: List[float],
-                   p0: Point,
-                   p1: Point,
+    @property
+    def source(self) -> Point:
+        return self._source
+
+    @property
+    def target(self) -> Point:
+        return self._target
+
+    def at(self, fraction: float) -> Point:
+        assert fraction >= 0.0 and fraction <= 1.0
+        return Point(
+            self._source.x + fraction*self._vector[0],
+            self._source.y + fraction*self._vector[1]
+        )
+    
+class DiscreteFunction:
+    def __init__(self, point_cloud: PointCloud, point_values: List[float]) -> None:
+        assert point_cloud.size == len(point_values)
+        self._point_cloud = point_cloud
+        self._values = point_values
+
+    def __call__(self, point: Point) -> float:
+        return self._values[self._point_cloud.get_nearest_point_index(point)]
+
+def plot_over_line(discrete_function: DiscreteFunction,
+                   line: Line,
                    n: int = 1000) -> None:
-    assert point_cloud.size == len(point_values)
 
     # First, let us discretize the line into `n` points
-    dx = (p1.x - p0.x)/(n - 1)
-    dy = (p1.y - p0.y)/(n - 1)
-    points_on_line = [Point(p0.x + dx*float(i), p0.y + dy*float(i)) for i in range(n)]
+    points_on_line = [line.at(i/(n-1)) for i in range(n)]
 
-    x = []
-    y = []
-    for i in range(n):
-        current = points_on_line[i]
-        x.append(p0.distance_to(current))
-        y.append(point_values[point_cloud.get_nearest_point_index(current)])
+    x, y = evaluate_discrete_function_at_points(discrete_function, points_on_line)
 
     plot(x, y)
     show()
     close()
 
+def evaluate_discrete_function_at_points(discrete_function: DiscreteFunction, points_on_line: List[Point]):
+    x = []
+    y = []
+    for i in range(len(points_on_line)):
+        current = points_on_line[i]
+        x.append(points_on_line[0].distance_to(current))
+        y.append(discrete_function(current))
+    return x,y
 
 def _test_function(position: Point) -> float:
     return sin(2.0*pi*position.x)*cos(2.0*pi*position.y)
@@ -110,10 +140,10 @@ if __name__ == "__main__":
 
     point_values = [_test_function(p) for p in point_cloud]
 
+    discrete_function = DiscreteFunction(point_cloud, point_values)
+
     plot_over_line(
-        point_cloud,
-        point_values,
-        Point(0.0, 0.0),
-        Point(1.0, 1.0),
+        discrete_function,
+        Line(Point(0.0, 0.0), Point(1.0, 1.0)),
         n=2000
     )

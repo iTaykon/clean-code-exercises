@@ -25,49 +25,60 @@ from dataclasses import dataclass
 
 
 class RasterGrid:
-    @dataclass
-    class Cell:
-        _ix: int
-        _iy: int
-
     def __init__(self,
-                 x0: float,
-                 y0: float,
-                 x1: float,
-                 y1: float,
-                 nx: int,
-                 ny: int) -> None:
-        self._x0 = x0
-        self._y0 = y0
-        self._x1 = x1
-        self._y1 = y1
-        self._nx = nx
-        self._ny = ny
-        self.nc = nx*ny
+                 lower_left_corner,
+                 upper_right_corner,
+                 number_cells_x: int,
+                 number_cells_y: int) -> None:
+        self._lower_left_corner = lower_left_corner
+        self._upper_right_corner = upper_right_corner
+        self._number_cells_x = number_cells_x
+        self._number_cells_y = number_cells_y
+        self.number_cells = number_cells_x*number_cells_y
         self.cells = [
-            self.Cell(i, j) for i in range(nx) for j in range(ny)
+            Cell(self, i, j) for i in range(number_cells_x) for j in range(number_cells_y)
         ]
 
-    def c(self, cell: Cell) -> Tuple[float, float]:
+    def get_lower_left_coordinates(self) -> Tuple[float, float]:
+        return self._lower_left_corner.get_coordinates()
+    
+    def get_upper_right_coordinates(self) -> Tuple[float, float]:
+        return self._upper_right_corner.get_coordinates()
+
+@dataclass
+class Cell:
+    _grid: RasterGrid
+    _ix: int
+    _iy: int
+
+    def get_cell_center(self) -> Tuple[float, float]:
+        lower_left_x, lower_left_y = self._grid.get_lower_left_coordinates()
+        upper_right_x, upper_right_y = self._grid.get_upper_right_coordinates()
         return (
-            self._x0 + (float(cell._ix) + 0.5)*(self._x1 - self._x0)/self._nx,
-            self._y0 + (float(cell._iy) + 0.5)*(self._y1 - self._y0)/self._ny
+            lower_left_x + (float(self._ix) + 0.5)*(upper_right_x - lower_left_x)/self._grid._number_cells_x,
+            lower_left_y + (float(self._iy) + 0.5)*(upper_right_y - lower_left_y)/self._grid._number_cells_y
         )
+
+@dataclass
+class Point:
+    x: float
+    y: float
+
+    def get_coordinates(self) -> Tuple[float, float]:
+        return self.x, self.y
 
 
 def test_number_of_cells():
-    x0 = 0.0
-    y0 = 0.0
-    dx = 1.0
-    dy = 1.0
-    assert RasterGrid(x0, y0, dx, dy, 10, 10).nc == 100
-    assert RasterGrid(x0, y0, dx, dy, 10, 20).nc == 200
-    assert RasterGrid(x0, y0, dx, dy, 20, 10).nc == 200
-    assert RasterGrid(x0, y0, dx, dy, 20, 20).nc == 400
+    p0 = Point(0.0, 0.0)
+    p1 = Point(1.0, 1.0)
+    assert RasterGrid(p0, p1, 10, 10).number_cells == 100
+    assert RasterGrid(p0, p1, 10, 20).number_cells == 200
+    assert RasterGrid(p0, p1, 20, 10).number_cells == 200
+    assert RasterGrid(p0, p1, 20, 20).number_cells == 400
 
 
 def test_cell_center():
-    grid = RasterGrid(0.0, 0.0, 2.0, 2.0, 2, 2)
+    grid = RasterGrid(Point(0.0, 0.0), Point(2.0, 2.0), 2, 2)
     expected_centers = [
         (0.5, 0.5),
         (1.5, 0.5),
@@ -77,7 +88,7 @@ def test_cell_center():
 
     for cell in grid.cells:
         for center in expected_centers:
-            if isclose(grid.c(cell)[0], center[0]) and isclose(grid.c(cell)[1], center[1]):
+            if isclose(cell.get_cell_center()[0], center[0]) and isclose(cell.get_cell_center()[1], center[1]):
                 expected_centers.remove(center)
 
     assert len(expected_centers) == 0
